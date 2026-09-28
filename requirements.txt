@@ -1,0 +1,8 @@
+# Dipendenze per Local Drop & Share
+PyQt6>=6.5.0
+qrcode>=7.4.2
+pillow>=10.0.0
+psutil>=5.9.0
+
+# Dipendenza opzionale per la compilazione / packaging standalone
+pyinstaller>=6.0.0
