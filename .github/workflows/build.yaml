@@ -1,0 +1,71 @@
+name: Build and Publish Add-on Images
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "local-drop-share/**"
+      - ".github/workflows/build.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: aarch64
+            platform: linux/arm64
+          - arch: amd64
+            platform: linux/amd64
+          - arch: armv7
+            platform: linux/arm/v7
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          VERSION=$(grep '^version:' local-drop-share/config.yaml | cut -d '"' -f 2)
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+          echo "OWNER=${OWNER}" >> $GITHUB_OUTPUT
+          echo "Building version: ${VERSION} for owner: ${OWNER}"
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./local-drop-share
+          file: ./local-drop-share/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: true
+          tags: |
+            ghcr.io/${{ steps.meta.outputs.OWNER }}/local_drop_share_${{ matrix.arch }}:${{ steps.meta.outputs.VERSION }}
+            ghcr.io/${{ steps.meta.outputs.OWNER }}/local_drop_share_${{ matrix.arch }}:latest
+          labels: |
+            io.hass.version=${{ steps.meta.outputs.VERSION }}
+            io.hass.arch=${{ matrix.arch }}
+            io.hass.type=addon
+            io.hass.name=Local Drop & Share
