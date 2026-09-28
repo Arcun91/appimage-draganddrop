@@ -20,15 +20,12 @@ echo "======================================================"
 echo " [1/5] Verifica dipendenze e preparazione ambiente..."
 echo "======================================================"
 
-python3 -m pip show pyinstaller > /dev/null 2>&1 || {
-    echo ">> Installazione di PyInstaller..."
-    python3 -m pip install --user --break-system-packages pyinstaller
-}
-
-python3 -m pip show qrcode > /dev/null 2>&1 || {
-    echo ">> Installazione di qrcode..."
-    python3 -m pip install --user --break-system-packages qrcode
-}
+if [ -f "requirements.txt" ]; then
+    echo ">> Verifica/installazione dipendenze da requirements.txt..."
+    python3 -m pip install --break-system-packages -r requirements.txt 2>/dev/null || \
+    python3 -m pip install -r requirements.txt 2>/dev/null || \
+    python3 -m pip install --user --break-system-packages -r requirements.txt
+fi
 
 # Generazione icona ad alta risoluzione
 if [ ! -f "assets/icon.png" ]; then
