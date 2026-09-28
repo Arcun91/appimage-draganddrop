@@ -1,21 +1,24 @@
-name: Build and Publish Add-on Images
+name: Build Add-on and AppImage
 
 on:
   push:
     branches:
       - main
-    paths:
-      - "local-drop-share/**"
-      - ".github/workflows/build.yaml"
+      - master
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
-  build:
-    name: Build ${{ matrix.arch }}
+  # ============================================================================
+  # 1. Compilazione Immagini Docker Multi-Arch per Home Assistant (GHCR)
+  # ============================================================================
+  build-addon:
+    name: Build Add-on (${{ matrix.arch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -69,3 +72,65 @@ jobs:
             io.hass.arch=${{ matrix.arch }}
             io.hass.type=addon
             io.hass.name=Local Drop & Share
+
+  # ============================================================================
+  # 2. Compilazione AppImage Standalone Linux (x86_64)
+  # ============================================================================
+  build-appimage:
+    name: Build Linux AppImage
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2 file wget curl libegl1 libgl1
+
+      - name: Build AppImage
+        run: |
+          chmod +x build_appimage.sh
+          ./build_appimage.sh
+
+      - name: Generate Checksum
+        run: |
+          sha256sum Local_Drop_Share-x86_64.AppImage > Local_Drop_Share-x86_64.AppImage.sha256
+
+      - name: Upload AppImage Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Local_Drop_Share-x86_64-AppImage
+          path: |
+            Local_Drop_Share-x86_64.AppImage
+            Local_Drop_Share-x86_64.AppImage.sha256
+
+  # ============================================================================
+  # 3. Creazione Release GitHub (se scatenato da un tag git, es. v1.1.0)
+  # ============================================================================
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-addon, build-appimage]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - name: Download AppImage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: Local_Drop_Share-x86_64-AppImage
+          path: release-assets
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
